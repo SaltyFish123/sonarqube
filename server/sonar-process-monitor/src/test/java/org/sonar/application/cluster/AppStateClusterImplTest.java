@@ -19,9 +19,14 @@
  */
 package org.sonar.application.cluster;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.ReplicatedMap;
+import java.io.IOException;
 import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.junit.Rule;
 import org.junit.Test;
@@ -29,12 +34,15 @@ import org.junit.rules.DisableOnDebug;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
+import org.slf4j.Logger;
 import org.sonar.application.AppStateListener;
 import org.sonar.application.config.TestAppSettings;
 import org.sonar.process.ProcessId;
 import org.sonar.process.ProcessProperties;
 
 import static org.assertj.core.api.Java6Assertions.assertThat;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -69,6 +77,32 @@ public class AppStateClusterImplTest {
     try (AppStateClusterImpl underTest = new AppStateClusterImpl(settings)) {
       assertThat(underTest.tryToLockWebLeader()).isEqualTo(true);
       assertThat(underTest.tryToLockWebLeader()).isEqualTo(false);
+    }
+  }
+
+  @Test
+  public void log_when_sonarqube_is_joining_a_cluster () throws IOException, InterruptedException, IllegalAccessException, NoSuchFieldException {
+    // Now launch an instance that try to be part of the hzInstance cluster
+    TestAppSettings settings = new TestAppSettings();
+    settings.set(ProcessProperties.CLUSTER_ENABLED, "true");
+    settings.set(ProcessProperties.CLUSTER_NAME, "sonarqube");
+    Logger logger = mock(Logger.class);
+    AppStateClusterImpl.setLogger(logger);
+
+    try (AppStateClusterImpl appStateCluster = new AppStateClusterImpl(settings)) {
+      verify(logger).info(
+        eq("Joined the cluster [{}] that contains the following hosts : [{}]"),
+        eq("sonarqube"),
+        anyString()
+      );
+    }
+  }
+
+  @Test
+  public void gethostname_must_return_a_value() {
+    TestAppSettings settings = newClusterSettings();
+    try (AppStateClusterImpl underTest = new AppStateClusterImpl(settings)) {
+      assertThat(underTest.getHostname()).containsPattern(".* \\(.*\\)");
     }
   }
 
@@ -158,5 +192,18 @@ public class AppStateClusterImplTest {
     settings.set(ProcessProperties.CLUSTER_ENABLED, "true");
     settings.set(ProcessProperties.CLUSTER_NAME, "sonarqube");
     return settings;
+  }
+
+  private static class LogAppender extends AppenderBase<ILoggingEvent> {
+    private List<ILoggingEvent> messages = new ArrayList<>();
+
+    @Override
+    protected void append(ILoggingEvent eventObject) {
+      messages.add(eventObject);
+    }
+
+    List<ILoggingEvent> getMessages() {
+      return messages;
+    }
   }
 }

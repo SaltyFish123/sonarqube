@@ -31,28 +31,40 @@ import com.hazelcast.core.IAtomicReference;
 import com.hazelcast.core.ILock;
 import com.hazelcast.core.MapEvent;
 import com.hazelcast.core.ReplicatedMap;
+import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.application.AppState;
 import org.sonar.application.AppStateListener;
 import org.sonar.application.config.AppSettings;
 import org.sonar.process.ProcessId;
 
+import static java.lang.String.format;
+import static java.util.Collections.list;
+import static org.apache.commons.lang.StringUtils.isBlank;
+
 public class AppStateClusterImpl implements AppState {
+  private static Logger LOGGER = LoggerFactory.getLogger(AppStateClusterImpl.class);
+
   static final String OPERATIONAL_PROCESSES = "OPERATIONAL_PROCESSES";
   static final String LEADER = "LEADER";
-
+  static final String HOSTNAME = "HOSTNAME";
   static final String SONARQUBE_VERSION = "SONARQUBE_VERSION";
 
   private final List<AppStateListener> listeners = new ArrayList<>();
   private final ReplicatedMap<ClusterProcess, Boolean> operationalProcesses;
   private final Map<ProcessId, Boolean> localProcesses = new EnumMap<>(ProcessId.class);
-  private final String listenerUuid;
+  private final String operationalProcessListenerUUID;
 
   final HazelcastInstance hzInstance;
 
@@ -65,12 +77,6 @@ public class AppStateClusterImpl implements AppState {
     }
 
     Config hzConfig = new Config();
-    try {
-      hzConfig.setInstanceName(InetAddress.getLocalHost().getHostName());
-    } catch (UnknownHostException e) {
-      // Ignore it
-    }
-
     hzConfig.getGroupConfig().setName(clusterProperties.getName());
 
     // Configure the network instance
@@ -103,12 +109,25 @@ public class AppStateClusterImpl implements AppState {
       // Use slf4j for logging
       .setProperty("hazelcast.logging.type", "slf4j");
 
+    // Trying to resolve the hostname
+    hzConfig.getMemberAttributeConfig().setStringAttribute(HOSTNAME, getHostname());
+
     // We are not using the partition group of Hazelcast, so disabling it
     hzConfig.getPartitionGroupConfig().setEnabled(false);
 
+    // Create the Hazelcast instance
     hzInstance = Hazelcast.newHazelcastInstance(hzConfig);
+
+    // Get or create the replicated map
     operationalProcesses = hzInstance.getReplicatedMap(OPERATIONAL_PROCESSES);
-    listenerUuid = operationalProcesses.addEntryListener(new OperationalProcessListener());
+    operationalProcessListenerUUID = operationalProcesses.addEntryListener(new OperationalProcessListener());
+
+    // Log the members of the cluster
+    String members = hzInstance.getCluster().getMembers().stream()
+      .filter(m -> !m.localMember())
+      .map(m -> m.getStringAttribute(HOSTNAME))
+      .collect(Collectors.joining(","));
+    LOGGER.info("Joined the cluster [{}] that contains the following hosts : [{}]", hzInstance.getConfig().getGroupConfig().getName(), members);
   }
 
   @Override
@@ -164,13 +183,18 @@ public class AppStateClusterImpl implements AppState {
   @Override
   public void close() {
     if (hzInstance != null) {
-      operationalProcesses.removeEntryListener(listenerUuid);
+      // Removing listeners
+      operationalProcesses.removeEntryListener(operationalProcessListenerUUID);
+
+      // Removing the operationalProcess from the replicated map
       operationalProcesses.keySet().forEach(
         clusterNodeProcess -> {
           if (clusterNodeProcess.getNodeUuid().equals(getLocalUuid())) {
             operationalProcesses.remove(clusterNodeProcess);
           }
         });
+
+      // Shutdown Hazelcast properly
       hzInstance.shutdown();
     }
   }
@@ -199,8 +223,49 @@ public class AppStateClusterImpl implements AppState {
     }
   }
 
-  private String getLocalUuid() {
+  String getLocalUuid() {
     return hzInstance.getLocalEndpoint().getUuid();
+  }
+
+  String getHostname() {
+    String hostname;
+    String ips;
+    try {
+      hostname = InetAddress.getLocalHost().getHostName();
+    } catch (UnknownHostException e) {
+      hostname = "unresolved hostname";
+    }
+
+    try {
+      ips = list(NetworkInterface.getNetworkInterfaces()).stream()
+        .flatMap(netif ->
+          list(netif.getInetAddresses()).stream()
+            .filter(inetAddress ->
+              // Removing IPv6 for the time being
+              inetAddress instanceof Inet4Address &&
+                // Removing loopback addresses, useless for identifying a server
+                !inetAddress.isLoopbackAddress() &&
+                // Removing interfaces without IPs
+                !isBlank(inetAddress.getHostAddress())
+            )
+            .map(InetAddress::getHostAddress)
+        )
+        .filter(p -> !isBlank(p))
+        .collect(Collectors.joining(","));
+    } catch (SocketException e) {
+      ips = "unresolved IPs";
+    }
+
+    return format("%s (%s)", hostname, ips);
+  }
+
+  /**
+   * Only used for testing purpose
+   *
+   * @param logger
+   */
+  static void setLogger(Logger logger) {
+    AppStateClusterImpl.LOGGER = logger;
   }
 
   private class OperationalProcessListener implements EntryListener<ClusterProcess, Boolean> {
