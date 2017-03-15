@@ -1,22 +1,3 @@
-/*
- * SonarQube
- * Copyright (C) 2009-2017 SonarSource SA
- * mailto:info AT sonarsource DOT com
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
- */
 package org.sonar.server.qualityprofile.ws;
 
 import java.net.HttpURLConnection;
@@ -44,8 +25,7 @@ import org.sonar.server.ws.WsActionTester;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.sonar.db.permission.OrganizationPermission.ADMINISTER_QUALITY_PROFILES;
 
-public class AddProjectActionTest {
-
+public class RemoveProjectActionTest {
   private static final String LANGUAGE_1 = "xoo";
   private static final String LANGUAGE_2 = "foo";
 
@@ -60,10 +40,10 @@ public class AddProjectActionTest {
   private QProfileProjectOperations qProfileProjectOperations = new QProfileProjectOperations(dbClient, userSession);
   private Languages languages = LanguageTesting.newLanguages(LANGUAGE_1, LANGUAGE_2);
   private ProjectAssociationParameters projectAssociationParameters = new ProjectAssociationParameters(languages);
-  private AddProjectAction underTest = new AddProjectAction(projectAssociationParameters, qProfileProjectOperations,
+
+  private RemoveProjectAction underTest = new RemoveProjectAction(projectAssociationParameters,
     new ProjectAssociationFinder(new QProfileLookup(dbClient),
-      new ComponentFinder(dbClient)),
-    dbClient);
+      new ComponentFinder(dbClient)), qProfileProjectOperations,dbClient);
   private WsActionTester tester = new WsActionTester(underTest);
 
   @Test
@@ -75,57 +55,45 @@ public class AddProjectActionTest {
   }
 
   @Test
-  public void add_project_on_profile_of_default_organization() {
+  public void remove_profile_from_project_in_default_organization() {
     logInAsProfileAdmin();
+
+    ComponentDto project = db.components().insertProject(db.getDefaultOrganization());
+    QualityProfileDto profileLang1 = db.qualityProfiles().insert(db.getDefaultOrganization(), p -> p.setLanguage(LANGUAGE_1));
+    QualityProfileDto profileLang2 = db.qualityProfiles().insert(db.getDefaultOrganization(), p -> p.setLanguage(LANGUAGE_2));
+    db.qualityProfiles().associateProjectWithQualityProfile(project, profileLang1);
+    db.qualityProfiles().associateProjectWithQualityProfile(project, profileLang2);
+
+    TestResponse response = call(project, profileLang1);
+    assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_NO_CONTENT);
+
+    assertProjectIsNotAssociatedToProfile(project, profileLang1);
+    assertProjectIsAssociatedToProfile(project, profileLang2);
+  }
+
+  @Test
+  public void removal_does_not_fail_if_profile_is_not_associated_to_project() {
+    logInAsProfileAdmin();
+
     ComponentDto project = db.components().insertProject(db.getDefaultOrganization());
     QualityProfileDto profile = db.qualityProfiles().insert(db.getDefaultOrganization());
 
     TestResponse response = call(project, profile);
     assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_NO_CONTENT);
 
-    assertProjectIsAssociatedToProfile(project, profile);
+    assertProjectIsNotAssociatedToProfile(project, profile);
   }
 
   @Test
-  public void change_association_in_default_organization() throws Exception {
-    logInAsProfileAdmin();
-
-    ComponentDto project = db.components().insertProject(db.getDefaultOrganization());
-    // two profiles on same language
-    QualityProfileDto profile1 = db.qualityProfiles().insert(db.getDefaultOrganization(), p -> p.setLanguage(LANGUAGE_1));
-    QualityProfileDto profile2 = db.qualityProfiles().insert(db.getDefaultOrganization(), p -> p.setLanguage(LANGUAGE_1));
-    db.qualityProfiles().associateProjectWithQualityProfile(project, profile1);
-
-    call(project, profile2);
-
-    assertProjectIsNotAssociatedToProfile(project, profile1);
-    assertProjectIsAssociatedToProfile(project, profile2);
-  }
-
-  @Test
-  public void changing_association_does_not_change_other_language_associations() throws Exception {
-    logInAsProfileAdmin();
-    ComponentDto project = db.components().insertProject(db.getDefaultOrganization());
-    QualityProfileDto profile1Language1 = db.qualityProfiles().insert(db.getDefaultOrganization(), p -> p.setLanguage(LANGUAGE_1));
-    QualityProfileDto profile2Language2 = db.qualityProfiles().insert(db.getDefaultOrganization(), p -> p.setLanguage(LANGUAGE_2));
-    QualityProfileDto profile3Language1 = db.qualityProfiles().insert(db.getDefaultOrganization(), p -> p.setLanguage(LANGUAGE_1));
-    db.qualityProfiles().associateProjectWithQualityProfile(project, profile1Language1, profile2Language2);
-
-    call(project, profile3Language1);
-
-    assertProjectIsAssociatedToProfile(project, profile3Language1);
-    assertProjectIsAssociatedToProfile(project, profile2Language2);
-  }
-
-  @Test
-  public void project_administrator_can_change_profile() throws Exception {
+  public void project_administrator_can_remove_profile() throws Exception {
     ComponentDto project = db.components().insertProject(db.getDefaultOrganization());
     QualityProfileDto profile = db.qualityProfiles().insert(db.getDefaultOrganization());
+    db.qualityProfiles().associateProjectWithQualityProfile(project, profile);
     userSession.logIn().addProjectUuidPermissions(UserRole.ADMIN, project.uuid());
 
     call(project, profile);
 
-    assertProjectIsAssociatedToProfile(project, profile);
+    assertProjectIsNotAssociatedToProfile(project, profile);
   }
 
   @Test
@@ -200,5 +168,4 @@ public class AddProjectActionTest {
       .setParam("profileKey", qualityProfile.getKey());
     return request.execute();
   }
-
 }

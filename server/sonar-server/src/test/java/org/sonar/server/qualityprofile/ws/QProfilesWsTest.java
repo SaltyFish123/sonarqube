@@ -65,7 +65,6 @@ public class QProfilesWsTest {
     controller = new WsTester(new QProfilesWs(
       new RuleActivationActions(profileService),
       new BulkRuleActivationActions(profileService, null),
-      new AddProjectAction(projectAssociationParameters, null, null, dbClient),
       new RemoveProjectAction(projectAssociationParameters, null, null, dbClient),
       new CreateAction(null, null, null, languages, wsSupport, userSessionRule, null, importers),
       new ImportersAction(importers),
@@ -133,14 +132,6 @@ public class QProfilesWsTest {
     assertThat(restoreProfiles).isNotNull();
     assertThat(restoreProfiles.isPost()).isTrue();
     assertThat(restoreProfiles.params()).hasSize(2);
-  }
-
-  @Test
-  public void define_add_project_action() {
-    WebService.Action addProject = controller.action("add_project");
-    assertThat(addProject).isNotNull();
-    assertThat(addProject.isPost()).isTrue();
-    assertThat(addProject.params()).hasSize(5);
   }
 
   @Test
