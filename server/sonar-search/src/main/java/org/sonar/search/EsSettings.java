@@ -34,12 +34,15 @@ import org.slf4j.LoggerFactory;
 import org.sonar.process.ProcessProperties;
 import org.sonar.process.Props;
 
+import static org.apache.commons.lang.StringUtils.isBlank;
+
 public class EsSettings implements EsSettingsMBean {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EsSettings.class);
   public static final String PROP_MARVEL_HOSTS = "sonar.search.marvelHosts";
   public static final String CLUSTER_SEARCH_NODE_NAME = "sonar.cluster.search.nodeName";
   public static final String STANDALONE_NODE_NAME = "sonarqube";
+  public static final String STANDALONE_CLUSTER_NAME = "sonarqube";
 
   private final Props props;
 
@@ -49,8 +52,14 @@ public class EsSettings implements EsSettingsMBean {
 
   EsSettings(Props props) {
     this.props = props;
-    // name of ES cluster must always be set, even if clustering of SQ is disabled
-    this.clusterName = props.nonNullValue(ProcessProperties.SEARCH_CLUSTER_NAME);
+
+    String configuredClusterName = props.nonNullValue(ProcessProperties.CLUSTER_NAME);
+    if (isBlank(configuredClusterName)) {
+      // name of ES cluster must always be set, even if clustering of SQ is disabled
+      this.clusterName = STANDALONE_CLUSTER_NAME;
+    } else {
+      this.clusterName = configuredClusterName;
+    }
 
     this.clusterEnabled = props.valueAsBoolean(ProcessProperties.CLUSTER_ENABLED);
     if (this.clusterEnabled) {
