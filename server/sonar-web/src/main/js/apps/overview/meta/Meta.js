@@ -26,6 +26,7 @@ import MetaQualityGate from './MetaQualityGate';
 import MetaQualityProfiles from './MetaQualityProfiles';
 import AnalysesList from '../events/AnalysesList';
 import MetaSize from './MetaSize';
+import TagsList from '../../../components/ui/TagsList';
 import { areThereCustomOrganizations } from '../../../store/rootReducer';
 
 const Meta = ({ component, measures, areThereCustomOrganizations }) => {
@@ -41,39 +42,38 @@ const Meta = ({ component, measures, areThereCustomOrganizations }) => {
 
   const shouldShowQualityProfiles = !isView && !isDeveloper && hasQualityProfiles;
   const shouldShowQualityGate = !isView && !isDeveloper && hasQualityGate;
-
   const shouldShowOrganizationKey = component.organization != null && areThereCustomOrganizations;
 
+  const configuration = component.configuration || {};
+
   return (
-      <div className="overview-meta">
-        {hasDescription && (
-            <div className="overview-meta-card overview-meta-description">
-              {description}
-            </div>
-        )}
+    <div className="overview-meta">
+      {hasDescription &&
+        <div className="overview-meta-card overview-meta-description">
+          {description}
+        </div>}
 
-        <MetaSize component={component} measures={measures}/>
+      <MetaSize component={component} measures={measures}/>
 
-        {shouldShowQualityGate && (
-            <MetaQualityGate gate={qualityGate}/>
-        )}
-
-        {shouldShowQualityProfiles && (
-            <MetaQualityProfiles profiles={qualityProfiles}/>
-        )}
-
-        <MetaLinks component={component}/>
-
-        <MetaKey component={component}/>
-
-        {shouldShowOrganizationKey && (
-            <MetaOrganizationKey component={component}/>
-        )}
-
-        {isProject && (
-            <AnalysesList project={component.key}/>
-        )}
+      <div className="overview-meta-card">
+        <TagsList
+          tags={component.tags}
+          allowUpdate={configuration.showSettings}
+          allowMultiLine={true}/>
       </div>
+
+      {shouldShowQualityGate && <MetaQualityGate gate={qualityGate}/>}
+
+      {shouldShowQualityProfiles && <MetaQualityProfiles profiles={qualityProfiles}/>}
+
+      <MetaLinks component={component}/>
+
+      <MetaKey component={component}/>
+
+      {shouldShowOrganizationKey && <MetaOrganizationKey component={component}/>}
+
+      {isProject && <AnalysesList project={component.key}/>}
+    </div>
   );
 };
 
