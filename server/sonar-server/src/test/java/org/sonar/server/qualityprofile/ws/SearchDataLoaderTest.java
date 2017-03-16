@@ -39,13 +39,10 @@ import org.sonar.db.organization.OrganizationDto;
 import org.sonar.db.qualityprofile.QualityProfileDto;
 import org.sonar.db.qualityprofile.QualityProfileTesting;
 import org.sonar.server.component.ComponentFinder;
-import org.sonar.server.exceptions.BadRequestException;
 import org.sonar.server.language.LanguageTesting;
 import org.sonar.server.organization.TestDefaultOrganizationProvider;
-import org.sonar.server.qualityprofile.QProfile;
 import org.sonar.server.qualityprofile.QProfileFactory;
 import org.sonar.server.qualityprofile.QProfileLookup;
-import org.sonar.server.qualityprofile.index.ActiveRuleIndex;
 import org.sonarqube.ws.client.qualityprofile.SearchWsRequest;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
@@ -68,7 +65,6 @@ public class SearchDataLoaderTest {
   private QProfileLookup profileLookup;
   private QProfileFactory profileFactory;
   private ComponentFinder componentFinder;
-  private ActiveRuleIndex activeRuleIndex;
   private QProfileWsSupport qProfileWsSupport;
   private OrganizationDto organization;
 
@@ -92,15 +88,7 @@ public class SearchDataLoaderTest {
   }
 
   @Test
-  public void findAll_in_default_organization() throws Exception {
-    insertQualityProfile(dbTester.getDefaultOrganization());
-    assertThat(findProfiles(
-      new SearchWsRequest()
-    )).hasSize(1);
-  }
-
-  @Test
-  public void findAll_in_specific_organization() throws Exception {
+  public void findAll() throws Exception {
     insertQualityProfile(organization);
     assertThat(findProfiles(
       new SearchWsRequest()
@@ -109,7 +97,7 @@ public class SearchDataLoaderTest {
   }
 
   @Test
-  public void findDefaults_in_specific_organization() throws Exception {
+  public void findDefaults() throws Exception {
     insertQualityProfile(organization, dto -> dto.setDefault(true));
     assertThat(findProfiles(
       new SearchWsRequest()
@@ -119,7 +107,7 @@ public class SearchDataLoaderTest {
   }
 
   @Test
-  public void findForProject_in_specific_organization() throws Exception {
+  public void findForProject() throws Exception {
     insertQualityProfile(organization, dto -> dto.setDefault(true));
     ComponentDto project1 = insertProject();
     assertThat(findProfiles(
@@ -130,7 +118,7 @@ public class SearchDataLoaderTest {
   }
 
   @Test
-  public void findAllForLanguage_in_specific_organization() throws Exception {
+  public void findAllForLanguage() throws Exception {
     QualityProfileDto qualityProfile = insertQualityProfile(organization, dto -> dto.setDefault(true));
     assertThat(findProfiles(
       new SearchWsRequest()
@@ -144,9 +132,9 @@ public class SearchDataLoaderTest {
     )).hasSize(0);
   }
 
-  private List<QProfile> findProfiles(SearchWsRequest request) {
+  private List<QualityProfileDto> findProfiles(SearchWsRequest request) {
     return new SearchDataLoader(languages, profileLookup, profileFactory, dbTester.getDbClient(), componentFinder, qProfileWsSupport)
-      .findProfiles(dbTester.getSession(), request);
+      .findProfiles(dbTester.getSession(), request, organization);
   }
 
   private QualityProfileDto insertQualityProfile(OrganizationDto organization, Consumer<QualityProfileDto>... specials) {

@@ -36,8 +36,8 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.organization.OrganizationDto;
+import org.sonar.db.qualityprofile.QualityProfileDto;
 import org.sonar.server.component.ComponentFinder;
-import org.sonar.server.qualityprofile.QProfile;
 import org.sonar.server.qualityprofile.QProfileFactory;
 import org.sonar.server.qualityprofile.QProfileLookup;
 import org.sonarqube.ws.client.qualityprofile.SearchWsRequest;
@@ -46,9 +46,9 @@ import static java.lang.String.format;
 
 public class SearchDataLoader {
 
-  private static final Comparator<QProfile> Q_PROFILE_COMPARATOR = Comparator
-          .comparing(QProfile::language)
-          .thenComparing(QProfile::name);
+  private static final Comparator<QualityProfileDto> Q_PROFILE_COMPARATOR = Comparator
+          .comparing(QualityProfileDto::getLanguage)
+          .thenComparing(QualityProfileDto::getName);
 
   private final Languages languages;
   private final QProfileLookup profileLookup;
@@ -68,9 +68,8 @@ public class SearchDataLoader {
   }
 
   @VisibleForTesting
-  List<QProfile> findProfiles(DbSession dbSession, SearchWsRequest request) {
-    OrganizationDto organization = qProfileWsSupport.getOrganizationByKey(dbSession, request.getOrganizationKey());
-    Collection<QProfile> profiles;
+  List<QualityProfileDto> findProfiles(DbSession dbSession, SearchWsRequest request, OrganizationDto organization) {
+    Collection<QualityProfileDto> profiles;
     if (askDefaultProfiles(request)) {
       profiles = findDefaultProfiles(dbSession, request, organization);
     } else if (hasComponentKey(request)) {
@@ -82,11 +81,11 @@ public class SearchDataLoader {
     return profiles.stream().sorted(Q_PROFILE_COMPARATOR).collect(Collectors.toList());
   }
 
-  private Collection<QProfile> findDefaultProfiles(DbSession dbSession, SearchWsRequest request, OrganizationDto organization) {
+  private Collection<QualityProfileDto> findDefaultProfiles(DbSession dbSession, SearchWsRequest request, OrganizationDto organization) {
     String profileName = request.getProfileName();
 
     Set<String> languageKeys = getLanguageKeys();
-    Map<String, QProfile> qualityProfiles = new HashMap<>(languageKeys.size());
+    Map<String, QualityProfileDto> qualityProfiles = new HashMap<>(languageKeys.size());
 
     Set<String> missingLanguageKeys = lookupByProfileName(dbSession, organization, qualityProfiles, languageKeys, profileName);
     Set<String> noDefaultProfileLanguageKeys = lookupDefaults(dbSession, organization, qualityProfiles, missingLanguageKeys);
@@ -98,12 +97,12 @@ public class SearchDataLoader {
     return qualityProfiles.values();
   }
 
-  private Collection<QProfile> findProjectProfiles(DbSession dbSession, SearchWsRequest request, OrganizationDto organization) {
+  private Collection<QualityProfileDto> findProjectProfiles(DbSession dbSession, SearchWsRequest request, OrganizationDto organization) {
     String componentKey = request.getProjectKey();
     String profileName = request.getProfileName();
 
     Set<String> languageKeys = getLanguageKeys();
-    Map<String, QProfile> qualityProfiles = new HashMap<>(languageKeys.size());
+    Map<String, QualityProfileDto> qualityProfiles = new HashMap<>(languageKeys.size());
 
     // look up profiles by profileName (if any) for each language
     Set<String> unresolvedLanguages = lookupByProfileName(dbSession, organization, qualityProfiles, languageKeys, profileName);
@@ -119,36 +118,36 @@ public class SearchDataLoader {
     return qualityProfiles.values();
   }
 
-  private List<QProfile> findAllProfiles(DbSession dbSession, SearchWsRequest request, OrganizationDto organization) {
+  private List<QualityProfileDto> findAllProfiles(DbSession dbSession, SearchWsRequest request, OrganizationDto organization) {
     String language = request.getLanguage();
 
     if (language == null) {
-      return profileLookup.allProfiles(dbSession, organization).stream().filter(qProfile -> languages.get(qProfile.language()) != null).collect(Collectors.toList());
+      return profileLookup.allProfiles(dbSession, organization).stream().filter(qProfile -> languages.get(qProfile.getLanguage()) != null).collect(Collectors.toList());
     }
     return profileLookup.profiles(dbSession, language, organization);
   }
 
-  private Set<String> lookupByProfileName(DbSession dbSession, OrganizationDto organization, Map<String, QProfile> qualityProfiles, Set<String> languageKeys,
-    @Nullable String profileName) {
+  private Set<String> lookupByProfileName(DbSession dbSession, OrganizationDto organization, Map<String, QualityProfileDto> qualityProfiles, Set<String> languageKeys,
+                                          @Nullable String profileName) {
     if (languageKeys.isEmpty() || profileName == null) {
       return languageKeys;
     }
 
     profileFactory.getByNameAndLanguages(dbSession, organization, profileName, languageKeys)
       .forEach(qualityProfile -> qualityProfiles
-        .put(qualityProfile.getLanguage(), QProfile.from(qualityProfile, organization)));
+        .put(qualityProfile.getLanguage(), qualityProfile));
     return difference(languageKeys, qualityProfiles.keySet());
   }
 
-  private Set<String> lookupByModuleKey(DbSession dbSession, OrganizationDto organization, Map<String, QProfile> qualityProfiles, Set<String> languageKeys,
-    @Nullable String moduleKey) {
+  private Set<String> lookupByModuleKey(DbSession dbSession, OrganizationDto organization, Map<String, QualityProfileDto> qualityProfiles, Set<String> languageKeys,
+                                        @Nullable String moduleKey) {
     if (languageKeys.isEmpty() || moduleKey == null) {
       return languageKeys;
     }
 
     ComponentDto project = getProject(moduleKey, dbSession);
     profileFactory.getByProjectAndLanguages(dbSession, organization, project.getKey(), languageKeys)
-            .forEach(qualityProfile -> qualityProfiles.put(qualityProfile.getLanguage(), QProfile.from(qualityProfile, organization)));
+            .forEach(qualityProfile -> qualityProfiles.put(qualityProfile.getLanguage(), qualityProfile));
     return difference(languageKeys, qualityProfiles.keySet());
   }
 
@@ -160,7 +159,7 @@ public class SearchDataLoader {
     return dbClient.componentDao().selectOrFailByUuid(session, module.projectUuid());
   }
 
-  private Set<String> lookupDefaults(DbSession dbSession, OrganizationDto organization, Map<String, QProfile> qualityProfiles, Set<String> languageKeys) {
+  private Set<String> lookupDefaults(DbSession dbSession, OrganizationDto organization, Map<String, QualityProfileDto> qualityProfiles, Set<String> languageKeys) {
     if (languageKeys.isEmpty()) {
       return languageKeys;
     }
@@ -173,18 +172,16 @@ public class SearchDataLoader {
     return Sets.newHashSet(Sets.difference(languageKeys, set2));
   }
 
-  private static void addAll(Map<String, QProfile> qualityProfiles, Collection<QProfile> list) {
-    list.forEach(qualityProfile -> qualityProfiles.put(qualityProfile.language(), qualityProfile));
+  private static void addAll(Map<String, QualityProfileDto> qualityProfiles, Collection<QualityProfileDto> list) {
+    list.forEach(qualityProfile -> qualityProfiles.put(qualityProfile.getLanguage(), qualityProfile));
   }
 
   private Set<String> getLanguageKeys() {
     return Arrays.stream(languages.all()).map(Language::getKey).collect(Collectors.toSet());
   }
 
-  private List<QProfile> findDefaultProfiles(final DbSession dbSession, OrganizationDto organization, Set<String> languageKeys) {
-    return profileFactory.getDefaults(dbSession, organization, languageKeys).stream()
-      .map(result -> QProfile.from(result, organization))
-      .collect(Collectors.toList());
+  private List<QualityProfileDto> findDefaultProfiles(final DbSession dbSession, OrganizationDto organization, Set<String> languageKeys) {
+    return profileFactory.getDefaults(dbSession, organization, languageKeys);
   }
 
   private static boolean askDefaultProfiles(SearchWsRequest request) {

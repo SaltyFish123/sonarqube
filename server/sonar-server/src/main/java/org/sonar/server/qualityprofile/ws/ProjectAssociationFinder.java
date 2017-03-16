@@ -22,9 +22,9 @@ package org.sonar.server.qualityprofile.ws;
 import javax.annotation.Nullable;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.qualityprofile.QualityProfileDto;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.exceptions.NotFoundException;
-import org.sonar.server.qualityprofile.QProfile;
 import org.sonar.server.qualityprofile.QProfileLookup;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -52,11 +52,11 @@ public class ProjectAssociationFinder {
   }
 
   private String getProfileKeyFromLanguageAndName(String language, String profileName) {
-    QProfile profile = profileLookup.profile(profileName, language);
+    QualityProfileDto profile = profileLookup.profile(profileName, language);
     if (profile == null) {
       throw new NotFoundException(String.format("Unable to find a profile for language '%s' with name '%s'", language, profileName));
     }
-    return profile.key();
+    return profile.getKey();
   }
 
 }

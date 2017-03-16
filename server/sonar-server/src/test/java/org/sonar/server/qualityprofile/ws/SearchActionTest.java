@@ -118,7 +118,8 @@ public class SearchActionTest {
         new ComponentFinder(dbClient), qProfileWsSupport),
       languages,
       activeRuleIndex,
-      dbClient);
+      dbClient,
+      qProfileWsSupport);
     ws = new WsActionTester(underTest);
   }
 
