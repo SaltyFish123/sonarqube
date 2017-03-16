@@ -275,7 +275,7 @@ public class QualityProfileEventsStepTest {
   }
 
   /**
-   * Just a trick to use variable args which is shorter than writing new QualityProfile[] { }
+   * Just a trick to use variable args which is shorter than writing new DefinedQProfile[] { }
    */
   private static QualityProfile[] arrayOf(QualityProfile... qps) {
     return qps;
