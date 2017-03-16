@@ -1,3 +1,22 @@
+/*
+ * SonarQube
+ * Copyright (C) 2009-2017 SonarSource SA
+ * mailto:info AT sonarsource DOT com
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
 package org.sonar.server.qualityprofile.ws;
 
 import java.net.HttpURLConnection;
@@ -14,9 +33,9 @@ import org.sonar.db.qualityprofile.QualityProfileDto;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.exceptions.ForbiddenException;
 import org.sonar.server.exceptions.NotFoundException;
+import org.sonar.server.exceptions.UnauthorizedException;
 import org.sonar.server.language.LanguageTesting;
-import org.sonar.server.qualityprofile.QProfileLookup;
-import org.sonar.server.qualityprofile.QProfileProjectOperations;
+import org.sonar.server.organization.TestDefaultOrganizationProvider;
 import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.ws.TestRequest;
 import org.sonar.server.ws.TestResponse;
@@ -37,13 +56,9 @@ public class RemoveProjectActionTest {
   public UserSessionRule userSession = UserSessionRule.standalone();
 
   private DbClient dbClient = db.getDbClient();
-  private QProfileProjectOperations qProfileProjectOperations = new QProfileProjectOperations(dbClient, userSession);
   private Languages languages = LanguageTesting.newLanguages(LANGUAGE_1, LANGUAGE_2);
-  private ProjectAssociationParameters projectAssociationParameters = new ProjectAssociationParameters(languages);
-
-  private RemoveProjectAction underTest = new RemoveProjectAction(projectAssociationParameters,
-    new ProjectAssociationFinder(new QProfileLookup(dbClient),
-      new ComponentFinder(dbClient)), qProfileProjectOperations,dbClient);
+  private QProfileWsSupport wsSupport = new QProfileWsSupport(dbClient, userSession, TestDefaultOrganizationProvider.from(db));
+  private RemoveProjectAction underTest = new RemoveProjectAction(dbClient, userSession, languages, new ComponentFinder(dbClient), wsSupport);
   private WsActionTester tester = new WsActionTester(underTest);
 
   @Test
@@ -51,7 +66,15 @@ public class RemoveProjectActionTest {
     WebService.Action definition = tester.getDef();
     assertThat(definition.since()).isEqualTo("5.2");
     assertThat(definition.isPost()).isTrue();
-    assertThat(definition.params()).extracting(WebService.Param::key).containsOnly("profileKey", "profileName", "projectKey", "language", "projectUuid");
+
+    // parameters
+    assertThat(definition.params()).extracting(WebService.Param::key).containsOnly("profileKey", "profileName", "projectKey", "language", "projectUuid", "organization");
+    WebService.Param languageParam = definition.param("language");
+    assertThat(languageParam.possibleValues()).containsOnly(LANGUAGE_1, LANGUAGE_2);
+    assertThat(languageParam.exampleValue()).isNull();
+    WebService.Param organizationParam = definition.param("organization");
+    assertThat(organizationParam.since()).isEqualTo("6.4");
+    assertThat(organizationParam.isInternal()).isTrue();
   }
 
   @Test
@@ -109,13 +132,13 @@ public class RemoveProjectActionTest {
   }
 
   @Test
-  public void throw_ForbiddenException_if_not_logged_in() {
+  public void throw_UnauthorizedException_if_not_logged_in() {
     userSession.anonymous();
     ComponentDto project = db.components().insertProject(db.getDefaultOrganization());
     QualityProfileDto profile = db.qualityProfiles().insert(db.getDefaultOrganization());
 
-    expectedException.expect(ForbiddenException.class);
-    expectedException.expectMessage("Insufficient privileges");
+    expectedException.expect(UnauthorizedException.class);
+    expectedException.expectMessage("Authentication is required");
 
     call(project, profile);
   }
@@ -140,7 +163,7 @@ public class RemoveProjectActionTest {
     ComponentDto project = db.components().insertProject(db.getDefaultOrganization());
 
     expectedException.expect(NotFoundException.class);
-    expectedException.expectMessage("Quality profile does not exist");
+    expectedException.expectMessage("Quality Profile with key 'unknown' does not exist");
 
     tester.newRequest()
       .setParam("projectUuid", project.uuid())

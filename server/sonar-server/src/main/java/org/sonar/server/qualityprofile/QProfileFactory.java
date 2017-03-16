@@ -26,7 +26,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.apache.commons.lang.StringUtils;
 import org.sonar.api.utils.System2;
@@ -172,11 +171,6 @@ public class QProfileFactory {
     QualityProfileDto profile;
     profile = db.qualityProfileDao().selectByNameAndLanguage(profileName, language, dbSession);
     return checkFound(profile, "Unable to find a profile for language '%s' with name '%s'", language, profileName);
-  }
-
-  @CheckForNull
-  public QualityProfileDto getByProjectAndLanguage(DbSession session, String projectKey, String language) {
-    return db.qualityProfileDao().selectByProjectAndLanguage(session, projectKey, language);
   }
 
   public List<QualityProfileDto> getByProjectAndLanguages(DbSession session, OrganizationDto organization, String projectKey, Set<String> languageKeys) {

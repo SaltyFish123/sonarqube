@@ -33,7 +33,6 @@ import org.sonar.db.DbClient;
 import org.sonar.server.language.LanguageTesting;
 import org.sonar.server.organization.DefaultOrganizationProvider;
 import org.sonar.server.organization.TestDefaultOrganizationProvider;
-import org.sonar.server.qualityprofile.QProfileExporters;
 import org.sonar.server.qualityprofile.QProfileFactory;
 import org.sonar.server.qualityprofile.QProfileService;
 import org.sonar.server.tester.UserSessionRule;
@@ -58,14 +57,12 @@ public class QProfilesWsTest {
     DbClient dbClient = mock(DbClient.class);
 
     Languages languages = LanguageTesting.newLanguages(xoo1Key, xoo2Key);
-    ProjectAssociationParameters projectAssociationParameters = new ProjectAssociationParameters(languages);
 
     ProfileImporter[] importers = createImporters(languages);
 
     controller = new WsTester(new QProfilesWs(
       new RuleActivationActions(profileService),
       new BulkRuleActivationActions(profileService, null),
-      new RemoveProjectAction(projectAssociationParameters, null, null, dbClient),
       new CreateAction(null, null, null, languages, wsSupport, userSessionRule, null, importers),
       new ImportersAction(importers),
       new SearchAction(null, languages),
@@ -132,14 +129,6 @@ public class QProfilesWsTest {
     assertThat(restoreProfiles).isNotNull();
     assertThat(restoreProfiles.isPost()).isTrue();
     assertThat(restoreProfiles.params()).hasSize(2);
-  }
-
-  @Test
-  public void define_remove_project_action() {
-    WebService.Action removeProject = controller.action("remove_project");
-    assertThat(removeProject).isNotNull();
-    assertThat(removeProject.isPost()).isTrue();
-    assertThat(removeProject.params()).hasSize(5);
   }
 
   @Test
