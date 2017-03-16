@@ -77,7 +77,7 @@ public class QProfilesWsTest {
       new DeleteAction(languages, null, null, userSessionRule, wsSupport),
       new CopyAction(dbClient, null, languages, wsSupport),
       new ExportersAction(),
-      new InheritanceAction(null, null, null, null, languages),
+      new InheritanceAction(null, null, null, null, languages, null),
       new RenameAction(null, wsSupport, dbClient, userSessionRule))).controller(QProfilesWs.API_ENDPOINT);
   }
 
