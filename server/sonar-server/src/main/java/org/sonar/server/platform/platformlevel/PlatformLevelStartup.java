@@ -27,6 +27,7 @@ import org.sonar.server.platform.web.RegisterServletFilters;
 import org.sonar.server.qualitygate.RegisterQualityGates;
 import org.sonar.server.qualityprofile.CachingRuleActivator;
 import org.sonar.server.qualityprofile.CachingRuleActivatorContextFactory;
+import org.sonar.server.qualityprofile.DefinedQProfileLoader;
 import org.sonar.server.qualityprofile.RegisterQualityProfiles;
 import org.sonar.server.rule.RegisterRules;
 import org.sonar.server.startup.ClearRulesOverloadedDebt;
@@ -48,7 +49,8 @@ public class PlatformLevelStartup extends PlatformLevel {
   protected void configureLevel() {
     add(GeneratePluginIndex.class,
       ServerLifecycleNotifier.class,
-      DefaultOrganizationEnforcer.class);
+      DefaultOrganizationEnforcer.class,
+      DefinedQProfileLoader.class);
 
     addIfStartupLeader(
       IndexerStartupTask.class,
