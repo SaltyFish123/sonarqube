@@ -33,7 +33,6 @@ import org.sonar.api.resources.Language;
 import org.sonar.api.resources.Languages;
 import org.sonar.api.utils.DateUtils;
 import org.sonar.api.utils.System2;
-import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
@@ -49,7 +48,6 @@ import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.language.LanguageTesting;
 import org.sonar.server.organization.DefaultOrganizationProvider;
 import org.sonar.server.organization.TestDefaultOrganizationProvider;
-import org.sonar.server.qualityprofile.QProfileFactory;
 import org.sonar.server.qualityprofile.QProfileLookup;
 import org.sonar.server.qualityprofile.index.ActiveRuleIndex;
 import org.sonar.server.tester.UserSessionRule;
@@ -75,7 +73,6 @@ import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_ORGANIZATION;
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_PROFILE_NAME;
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_PROJECT_KEY;
-
 
 public class SearchActionTest {
 
@@ -111,7 +108,6 @@ public class SearchActionTest {
       new SearchDataLoader(
         languages,
         new QProfileLookup(dbClient),
-        new QProfileFactory(dbClient, UuidFactoryFast.getInstance(), System2.INSTANCE),
         dbClient,
         new ComponentFinder(dbClient), activeRuleIndex, qProfileWsSupport),
       languages);
@@ -297,6 +293,7 @@ public class SearchActionTest {
       .contains("sonar-way-xoo1-12345", "sonar-way-xoo2-12345")
       .doesNotContain("sonar-way-xoo1-45678");
   }
+
   @Test
   public void search_default_profile_by_profile_name_and_org() {
     List<QualityProfileDto> profiles = new ArrayList<>();

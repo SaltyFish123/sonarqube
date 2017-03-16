@@ -38,7 +38,6 @@ import org.sonar.db.component.ComponentDto;
 import org.sonar.db.organization.OrganizationDto;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.qualityprofile.QProfile;
-import org.sonar.server.qualityprofile.QProfileFactory;
 import org.sonar.server.qualityprofile.QProfileLookup;
 import org.sonar.server.qualityprofile.index.ActiveRuleIndex;
 import org.sonarqube.ws.client.qualityprofile.SearchWsRequest;
@@ -49,23 +48,20 @@ import static org.sonar.server.ws.WsUtils.checkRequest;
 public class SearchDataLoader {
 
   private static final Comparator<QProfile> Q_PROFILE_COMPARATOR = Comparator
-          .comparing(QProfile::language)
-          .thenComparing(QProfile::name);
+    .comparing(QProfile::language)
+    .thenComparing(QProfile::name);
 
   private final Languages languages;
   private final QProfileLookup profileLookup;
-  private final QProfileFactory profileFactory;
   private final DbClient dbClient;
   private final ComponentFinder componentFinder;
   private final ActiveRuleIndex activeRuleIndex;
-
   private final QProfileWsSupport qProfileWsSupport;
 
-  public SearchDataLoader(Languages languages, QProfileLookup profileLookup, QProfileFactory profileFactory, DbClient dbClient,
+  public SearchDataLoader(Languages languages, QProfileLookup profileLookup, DbClient dbClient,
     ComponentFinder componentFinder, ActiveRuleIndex activeRuleIndex, QProfileWsSupport qProfileWsSupport) {
     this.languages = languages;
     this.profileLookup = profileLookup;
-    this.profileFactory = profileFactory;
     this.dbClient = dbClient;
     this.componentFinder = componentFinder;
     this.activeRuleIndex = activeRuleIndex;
@@ -151,7 +147,7 @@ public class SearchDataLoader {
       return languageKeys;
     }
 
-    profileFactory.getByNameAndLanguages(dbSession, organization, profileName, languageKeys)
+    dbClient.qualityProfileDao().selectByNameAndLanguages(organization, profileName, languageKeys, dbSession)
       .forEach(qualityProfile -> qualityProfiles
         .put(qualityProfile.getLanguage(), QProfile.from(qualityProfile, organization)));
     return difference(languageKeys, qualityProfiles.keySet());
@@ -164,8 +160,8 @@ public class SearchDataLoader {
     }
 
     ComponentDto project = getProject(moduleKey, dbSession);
-    profileFactory.getByProjectAndLanguages(dbSession, organization, project.getKey(), languageKeys)
-            .forEach(qualityProfile -> qualityProfiles.put(qualityProfile.getLanguage(), QProfile.from(qualityProfile, organization)));
+    dbClient.qualityProfileDao().selectByProjectAndLanguages(dbSession, organization, project.getKey(), languageKeys)
+      .forEach(qualityProfile -> qualityProfiles.put(qualityProfile.getLanguage(), QProfile.from(qualityProfile, organization)));
     return difference(languageKeys, qualityProfiles.keySet());
   }
 
@@ -199,7 +195,7 @@ public class SearchDataLoader {
   }
 
   private List<QProfile> findDefaultProfiles(final DbSession dbSession, OrganizationDto organization, Set<String> languageKeys) {
-    return profileFactory.getDefaults(dbSession, organization, languageKeys).stream()
+    return dbClient.qualityProfileDao().selectDefaultProfiles(dbSession, organization, languageKeys).stream()
       .map(result -> QProfile.from(result, organization))
       .collect(Collectors.toList());
   }
